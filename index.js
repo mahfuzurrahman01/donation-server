@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 var jwt = require('jsonwebtoken');
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const app = express();
 const port = process.env.PORT || 5000;
 require('dotenv').config()
@@ -20,7 +20,6 @@ const client = new MongoClient(uri, {
     deprecationErrors: true,
   }
 });
-
 
 // this function is verifying the token for granting access
 function verifyJwt(req, res, next) {
@@ -46,8 +45,9 @@ async function bootstrap() {
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log('successfully connected database')
-    const donationUsers = client.db('usersData').collection('users')
-
+    const donationUsers = client.db('donations').collection('users')
+    const donationLists = client.db('donations').collection('donationsList')
+    const donorLists = client.db('donations').collection('donorLists')
     // We are sending access token after successful authentication
     app.post('/jwt', async (req, res) => {
       const user = req.body;
@@ -102,10 +102,112 @@ async function bootstrap() {
     app.get('/checkRole', verifyJwt, async (req, res) => {
       const query = { email: req.decoded.email }
       const result = await donationUsers.findOne(query)
+      const newResult = {
+        name: result?.name,
+        email: result?.email,
+        role: result?.role
+      }
       res.status(200).json({
         ok: true,
-        userInfo: result
+        userInfo: newResult
       })
+    })
+    // create donation by admin 
+    app.post('/create/donation', verifyJwt, async (req, res) => {
+      const body = req.body
+      const query = { email: req?.decoded?.email }
+      const result = await donationUsers.findOne(query)
+      if (result?.role !== 'admin') {
+        res.send({ ok: false, message: "Access Restricted: Admin Only" })
+        return
+      }
+      const response = await donationLists.insertOne(body)
+      res.status(200).json({
+        ok: true,
+        data: response
+      })
+    })
+
+    app.get('/all-donation', verifyJwt, async (req, res) => {
+      const query = {}
+      const result = await donationLists.find(query).toArray()
+      res.status(200).json({
+        ok: true,
+        data: result
+      })
+    })
+    // updating donation
+    app.patch('/donation/update/:id', verifyJwt, async (req, res) => {
+      const body = req.body;
+      const id = req.params.id;
+      const filter = { _id: ObjectId(id) }
+      const options = { upsert: true };
+      const updateDoc = {
+        $set: body,
+      };
+      console.log(body)
+      const query = { email: req?.decoded?.email }
+      const result = await donationUsers.findOne(query)
+      if (result?.role !== 'admin') {
+        res.send({ ok: false, message: "Access Restricted: Admin Only" })
+        return
+      }
+      const updateResult = await donationLists.updateOne(filter, updateDoc, options)
+      res.status(200).json({
+        ok: true,
+        data: updateResult
+      })
+    })
+    // delete any donation
+    app.delete('/donation/delete/:id', verifyJwt, async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: ObjectId(id) }
+      const result = await donationLists.deleteOne(query)
+      res.status(200).json({
+        ok: true,
+        data: result
+      })
+    })
+    // donate by donors 
+    app.post('/donate', verifyJwt, async (req, res) => {
+      const body = req.body;
+      console.log(body)
+      if (body?.donorEmail !== req.decoded.email) {
+        console.log('unothorized from 174')
+        res.send({
+          ok: false,
+          message: "You're not an authorized user"
+        })
+        return
+      }
+      const query = { _id: ObjectId(body.donationId) }
+      const filter = { _id: ObjectId(body.donationId) }
+      const getDonations = await donationLists.findOne(query)
+      const previousFund = getDonations?.fundCollected;
+      const newDonation = body.donatedAmount;
+      let lastFund;
+      if (typeof (previousFund) !== 'number') {
+        lastFund = parseFloat(previousFund)
+      } else {
+        lastFund = previousFund
+      }
+      console.log(lastFund)
+      console.log(newDonation)
+      const newAmount = lastFund + newDonation;
+      const updateDoc = {
+        $set: {
+          fundCollected: newAmount
+        },
+      };
+      const options = { upsert: true };
+      const updateAmount = await donationLists.updateOne(filter, updateDoc, options)
+      if (updateAmount?.acknowledged) {
+        const result = await donorLists.insertOne(body)
+        res.status(200).json({
+          ok: true,
+          data: result
+        })
+      }
     })
 
   } catch (error) {
