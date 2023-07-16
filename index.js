@@ -129,7 +129,10 @@ async function bootstrap() {
     })
 
     app.get('/all-donation', verifyJwt, async (req, res) => {
-      const query = {}
+      let query = {}
+      if(req?.query?.sortingName !== "all"){
+        query = {category: req.query.sortingName}
+      }
       const result = await donationLists.find(query).toArray()
       res.status(200).json({
         ok: true,
@@ -204,6 +207,52 @@ async function bootstrap() {
         })
       }
     })
+    app.get('/userDonation', verifyJwt, async (req, res) => {
+      const query = { donorEmail: req.decoded.email }
+      const result = await donorLists.find(query).toArray()
+      res.status(200).json({
+        ok: true,
+        data: result
+      })
+    })
+    // get all report 
+    app.get('/reports', verifyJwt, async(req,res) => {
+      const userQuery = {email: req.decoded.email}
+      const getUser = await donationUsers.findOne(userQuery)
+      if(getUser?.role !== "admin"){
+        res.send({
+          ok: false,
+          message: "Access Restricted: Admin Only"
+        })
+        return
+      }
+      let reportQuery = {}
+      if(req.query.sortingName !== "all"){
+        reportQuery = {donationCategory : req.query.sortingName}
+      }
+
+      const result = await donorLists.find(reportQuery).toArray()
+
+      if(result){
+        return res.status(200).json({
+          ok: true,
+          data: result
+        })
+      }
+    })
+
+  //  app.patch('/update/all',async(req,res) =>{
+
+  //     const filter = { donationId: "64b2fe216ccb5dbdc3802b61"}
+  //     const options = { upsert: true };
+  //     const updateDoc = {
+  //       $set: {
+  //         donationCategory:"Shelter"
+  //       },
+  //     };
+  //    const result  = await donorLists.updateMany(filter,updateDoc)
+  //     console.log(result)
+  //  })
 
   } catch (error) {
     console.log(error)
