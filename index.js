@@ -128,7 +128,7 @@ async function bootstrap() {
       })
     })
 
-    app.get('/all-donation', async (req, res) => {
+    app.get('/all-donation', verifyJwt, async (req, res) => {
       const query = {}
       const result = await donationLists.find(query).toArray()
       res.status(200).json({
