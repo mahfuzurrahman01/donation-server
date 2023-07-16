@@ -145,7 +145,6 @@ async function bootstrap() {
       const updateDoc = {
         $set: body,
       };
-      console.log(body)
       const query = { email: req?.decoded?.email }
       const result = await donationUsers.findOne(query)
       if (result?.role !== 'admin') {
@@ -171,9 +170,7 @@ async function bootstrap() {
     // donate by donors 
     app.post('/donate', verifyJwt, async (req, res) => {
       const body = req.body;
-      console.log(body)
       if (body?.donorEmail !== req.decoded.email) {
-        console.log('unothorized from 174')
         res.send({
           ok: false,
           message: "You're not an authorized user"
@@ -191,8 +188,6 @@ async function bootstrap() {
       } else {
         lastFund = previousFund
       }
-      console.log(lastFund)
-      console.log(newDonation)
       const newAmount = lastFund + newDonation;
       const updateDoc = {
         $set: {
